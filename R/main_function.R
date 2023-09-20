@@ -101,14 +101,17 @@ rspBART <- function(x_train,
 
   # Setting new parameters for the spline
   ndx <- nIknots+1
-  dx <- (x_max-x_min)/ndx
   ord_ <- 4
   degree_ <- 3
-
+  x_min_sp <- apply(x_train_scale,2,min)
+  x_max_sp <- apply(x_train_scale,2,max)
+  dx <- (x_max_sp-x_min_sp)/ndx
+  
   # New_knots
   new_knots <- matrix()
-  new_knots <- matrix(mapply(x_min,x_max,dx, FUN = function(MIN,MAX,DX){seq(from = MIN-(ord_-1)*DX, to = MAX+(ord_-1)*DX, by = DX)}), ncol = length(dummy_x$continuousVars)) # MIN and MAX are 0 and 1 respectively, because of the scale
+  new_knots <- matrix(mapply(x_min_sp,x_max_sp,dx, FUN = function(MIN,MAX,DX){seq(from = MIN-(ord_-1)*DX, to = MAX+(ord_-1)*DX, by = DX)}), ncol = length(dummy_x$continuousVars)) # MIN and MAX are 0 and 1 respectively, because of the scale
   colnames(new_knots) <- dummy_x$continuousVars
+  
 
   # Selecting which one gonna be used bs or splines.des()
   if(use_bs){
