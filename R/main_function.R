@@ -2,7 +2,7 @@
 rm(list=ls())
 source("R/other_functions.R")
 source("R/sim_functions.R")
-source("R/debugging_rspBART.R")
+source("inst/debugging_rspBART.R")
 source("R/tree_functions.R")
 # set.seed(42)
 
@@ -28,7 +28,8 @@ rspBART <- function(x_train,
                     numcut = 100L, # Defining the grid of split rules
                     usequants = FALSE,
                     motrbart_bool = FALSE,
-                    use_bs = FALSE
+                    use_bs = FALSE,
+                    plot_preview = FALSE
 ) {
 
   # Verifying if x_train and x_test are matrices
@@ -106,12 +107,11 @@ rspBART <- function(x_train,
   x_min_sp <- apply(x_train_scale,2,min)
   x_max_sp <- apply(x_train_scale,2,max)
   dx <- (x_max_sp-x_min_sp)/ndx
-  
+
   # New_knots
   new_knots <- matrix()
   new_knots <- matrix(mapply(x_min_sp,x_max_sp,dx, FUN = function(MIN,MAX,DX){seq(from = MIN-(ord_-1)*DX, to = MAX+(ord_-1)*DX, by = DX)}), ncol = length(dummy_x$continuousVars)) # MIN and MAX are 0 and 1 respectively, because of the scale
   colnames(new_knots) <- dummy_x$continuousVars
-  
 
   # Selecting which one gonna be used bs or splines.des()
   if(use_bs){
@@ -226,12 +226,15 @@ rspBART <- function(x_train,
   # Scaling "y"
   if(scale_bool){
     y_scale <- normalize_bart(y = y_train,a = min_y,b = max_y)
-    tau_gamma <- tau_mu <- (4*n_tree*(kappa^2))
+    tau_gamma <- (8*n_tree*(kappa^2))
+    tau_mu <- (8*n_tree*(kappa^2))
 
   } else {
     y_scale <- y_train
 
-    tau_gamma <- tau_mu <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
+    tau_gamma <- (8*n_tree*(kappa^2))/((max_y-min_y)^2)
+    tau_mu <- (8*n_tree*(kappa^2))/((max_y-min_y)^2)
+
   }
 
 
@@ -364,9 +367,12 @@ rspBART <- function(x_train,
   trees_fit <- matrix(0,nrow = n_tree,ncol = nrow(x_train_scale))
   trees_fit_test <- matrix(0,nrow = n_tree, ncol  = nrow(x_test_scale))
 
-  # Initial prediction
-  for(i in 1:n_tree){
-    trees_fit[i,] <- y_scale/n_tree
+  # For cases where the tree is greater than one;
+  if(n_tree>1){
+    # Initial prediction
+    for(i in 1:n_tree){
+      trees_fit[i,] <- y_scale/n_tree
+    }
   }
 
   # Initialsing the loop
@@ -445,16 +451,17 @@ rspBART <- function(x_train,
 
 
     # Seeing the results for the unidimensional cases.
-    # plot(x_train_scale,y_scale)
-    # for(plot_i in 1:n_tree){
-    #   points(x_train_scale,trees_fit[plot_i,],pch=20,col = ggplot2::alpha(plot_i,0.2))
-    # }
-    # points(x_train_scale,y_hat,col = "blue",pch=20)
-
+    if(plot_preview){
+        plot(x_train_scale,y_scale)
+        for(plot_i in 1:n_tree){
+          points(x_train_scale,trees_fit[plot_i,],pch=20,col = ggplot2::alpha(plot_i,0.2))
+        }
+        points(x_train_scale,y_hat,col = "blue",pch=20)
+    }
 
 
     # Updating all other parameters
-    data$tau_beta <- update_tau_betas(forest = forest,data = data)
+    # data$tau_beta <- update_tau_betas(forest = forest,data = data)
     # data$tau_gamma <- update_tau_gamma(forest = forest,data = data)
 
     # Updating delta
@@ -550,8 +557,8 @@ rspBART <- function(x_train,
   # plot(all_tau_beta, type = "l")
   # plot(all_tau_gamma,type = "l")
   # plot(all_delta, type = "l")
-  # plot(x_train_scale,y_scale)
-  # points(x_train_scale,colMeans(all_y_hat[1501:2000,]),pch= 20, col = "blue")
+  plot(x_train_scale,y_scale)
+  points(x_train_scale,colMeans(all_y_hat[1501:2000,]),pch= 20, col = "blue")
   # # ============================================
   #
   # curr <- 0

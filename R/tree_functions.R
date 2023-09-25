@@ -16,7 +16,7 @@ stump <- function(data){
     left = NA,
     right = NA,
     parent_node = NA,
-    ancestors = NULL,
+    ancestors = 1:ncol(data$x_train),
     terminal = TRUE,
     gamma = 0,
     betas_vec = NULL
@@ -87,7 +87,7 @@ nodeLogLike <- function(curr_part_res,
 
     # Using the Andrew's approach I would have
     mean_aux <- rep(0,length(curr_part_res_leaf))
-    cov_aux <- diag(x = (data$tau^(-1)),nrow = n_leaf) + (data$tau_gamma^(-1))*matrix(1,nrow = n_leaf,ncol = n_leaf)
+    cov_aux <- diag(x = (data$tau^(-1)),nrow = n_leaf) + matrix((data$tau_gamma^(-1)),nrow = n_leaf,ncol = n_leaf)
     result <- mvnfast::dmvn(X = curr_part_res_leaf,mu = mean_aux,sigma = cov_aux,log = TRUE)
   } else {
     # Getting the p_{tell} i.e: number of betas of the current terminal node
@@ -96,7 +96,7 @@ nodeLogLike <- function(curr_part_res,
 
     # Using the Andrew's approach I would have
     mean_aux <- rep(0,length(curr_part_res_leaf))
-    cov_aux <- diag(x = (data$tau^(-1)),nrow = n_leaf) + (data$tau_gamma^(-1))*matrix(1,nrow = n_leaf,ncol = n_leaf)  + (data$tau_beta^(-1))*tcrossprod(D_leaf)
+    cov_aux <- diag(x = (data$tau^(-1)),nrow = n_leaf) + matrix((data$tau_gamma^(-1)),nrow = n_leaf,ncol = n_leaf)  + (data$tau_beta^(-1))*tcrossprod(D_leaf)
     result <- mvnfast::dmvn(X = curr_part_res_leaf,mu = mean_aux,sigma = cov_aux,log = TRUE)
 
   }
@@ -104,6 +104,53 @@ nodeLogLike <- function(curr_part_res,
   return(c(result))
 
 }
+
+
+# # A function to calculate the loglikelihood
+# nodeLogLike <- function(curr_part_res,
+#                         ancestors,
+#                         index_node,
+#                         data){
+#
+#   # Subsetting the residuals
+#   curr_part_res_leaf <- curr_part_res[index_node]
+#
+#   # Getting the number of observationsin the terminal node
+#   n_leaf <- length(index_node)
+#   d_basis <- length(ancestors)
+#   ones <- matrix(1,nrow = n_leaf)
+#   # Getting the index of all covariates for each basis from each ancestors
+#   D_subset_index <- unlist(data$basis_subindex[ancestors])
+#
+#   # Calculating the nodeLogLikelihood for a stump
+#   if(length(D_subset_index)==0){
+#
+#     # Using my approach
+#     s_gamma <- n_leaf + (data$tau_gamma/data$tau)
+#     result <- 0.5*(n_leaf-1)*log(data$tau)-0.5*log(s_gamma)-data$tau*crossprod(curr_part_res_leaf)+0.5*data$tau*(1/s_gamma)*(sum(curr_part_res_leaf)^2)
+#
+#   } else {
+#     # Getting the p_{tell} i.e: number of betas of the current terminal node
+#     d_basis <- length(D_subset_index)
+#     D_leaf <- data$D_train[index_node,D_subset_index, drop = FALSE]
+#
+#
+#     # # Using the standard approach I would have:
+#     s_gamma <- n_leaf + (data$tau_gamma/data$tau)
+#     s_beta_aux_d <- crossprod(crossprod(ones,D_leaf))/s_gamma
+#     res_m <- matrix(curr_part_res_leaf,ncol = 1)
+#     s_beta <- crossprod(D_leaf)+diag(x = data$tau_beta/data$tau, nrow = d_basis) - s_beta_aux_d
+#     Gamma_beta <- crossprod(D_leaf,res_m)-(s_gamma^(-1))*crossprod(D_leaf,ones)%*%crossprod(ones,res_m)
+#
+#     # Getting the result
+#     result <- -0.5*(n_leaf-1-d_basis)*log(2*pi) + 0.5*(n_leaf-1-d_basis)*log(data$tau) + d_basis*log(data$tau_beta) -0.5*log(s_gamma)-0.5*determinant(chol2inv(chol(s_beta)),logarithm = TRUE)$modulus -0.5*data$tau*(crossprod(res_m)-(s_gamma^(-1))*crossprod(crossprod(ones,res_m))-crossprod(Gamma_beta,(solve(s_beta,Gamma_beta))))
+#
+#
+#   }
+#
+#   return(c(result))
+#
+# }
 
 # Grow a tree
 grow <- function(tree,
@@ -229,7 +276,7 @@ grow <- function(tree,
                       left = NA,
                       right = NA,
                       parent_node = g_node_name,
-                      ancestors = c(g_node$ancestors,p_var),
+                      ancestors = g_node$ancestors,
                       terminal = TRUE,
                       gamma = 0,
                       betas_vec = rep(0,ncol(data$D_train)))
@@ -246,7 +293,7 @@ grow <- function(tree,
                       left = NA,
                       right = NA,
                       parent_node = g_node_name,
-                      ancestors = c(g_node$ancestors,p_var),
+                      ancestors = g_node$ancestors,
                       terminal = TRUE,
                       gamma = 0,
                       betas_vec = rep(0,ncol(data$D_train)))
@@ -445,11 +492,9 @@ change <- function(tree,
   old_p_var <- tree[[c_node$left]]$node_var
 
   # Storing new left and right ancestors
+  #( in this case as I always using all predictors as ancestors doesn't make any difference)
   new_left_ancestors <- tree[[c_node$left]]$ancestors
-  new_left_ancestors[length(new_left_ancestors)] <- p_var
-
   new_right_ancestors <- tree[[c_node$right]]$ancestors
-  new_right_ancestors[length(new_right_ancestors)] <- p_var
 
   new_c_loglike_left <-  nodeLogLike(curr_part_res = curr_part_res,
                                 index_node = left_index,
@@ -523,13 +568,13 @@ updateGamma <- function(tree,
 
     if(length(leaf_basis_subindex)==0){
     # Computing mean and sd from the intercep
-      one_s_gamma_one <- data$tau*diag_
-      gamma_post_var <- 1/(one_s_gamma_one+data$tau_gamma)
-      gamma_post_mean <- gamma_post_var*sum(r_leaf)
+      s_gamma_inv <- data$tau*diag_
+      gamma_post_var <- 1/(n_leaf*data$tau+data$tau_gamma)
+      gamma_post_mean <- gamma_post_var*data$tau*sum(r_leaf)
     } else {
       s_gamma_inv <- data$tau*diag_-(data$tau^2)*D_leaf%*%solve((data$tau_beta*diag_basis+data$tau*crossprod(D_leaf)),t(D_leaf))
-      one_s_gamma_one <- sum(s_gamma_inv)
-      gamma_post_var <- 1/(one_s_gamma_one+data$tau_gamma)
+      one_s_inv_gamma_one <- sum(s_gamma_inv)
+      gamma_post_var <- 1/(one_s_inv_gamma_one+data$tau_gamma)
       gamma_post_mean <- gamma_post_var*crossprod(colSums(s_gamma_inv),r_leaf)
     }
 
@@ -578,16 +623,15 @@ updateBetas <- function(tree,
     diag_leaf <- diag(nrow = n_leaf)
     diag_basis <- diag(nrow = basis_dim)
 
-    s_beta_inv <- data$tau*diag_leaf-(data$tau^2)/(data$tau_gamma+n_leaf*data$tau)*matrix(1,nrow = n_leaf,ncol = n_leaf)
-    beta_post_var_chol <- (chol(   ( crossprod(D_leaf,s_beta_inv)%*%D_leaf + data$tau*diag_basis ) ))
-    beta_post_var <- chol2inv(beta_post_var_chol)
+    s_beta_inv <- data$tau*diag_leaf-matrix((data$tau^2)/(data$tau_gamma+n_leaf*data$tau),nrow = n_leaf,ncol = n_leaf)
 
-    # Calculating the mean to be sampled
-    beta_mean <- beta_post_var%*%crossprod(D_leaf,s_beta_inv)%*%res_leaf
-    # print(sum_aux)
+    Dsbinv_ <- crossprod(D_leaf,s_beta_inv)
+    #  Calculating the quantities need to the posterior of \beta
+    b_ <- Dsbinv_%*%res_leaf
+    Q_ <- (Dsbinv_%*%D_leaf + data$tau_beta*diag_basis)
+
     # Check this line again if there's any bug on the cholesky decomposition
-    tree[[t_nodes_names[i]]]$betas_vec[leaf_basis_subindex] <- c(mvnfast::rmvn(n = 1,mu = beta_mean,
-                                                            sigma = beta_post_var,isChol = TRUE))
+    tree[[t_nodes_names[i]]]$betas_vec[leaf_basis_subindex] <- c(keefe_mvn_sampler(b = b_,Q = Q_))
   }
 
   # Returning the tree
