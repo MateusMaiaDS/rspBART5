@@ -226,14 +226,14 @@ rspBART <- function(x_train,
   # Scaling "y"
   if(scale_bool){
     y_scale <- normalize_bart(y = y_train,a = min_y,b = max_y)
-    tau_gamma <- (8*n_tree*(kappa^2))
-    tau_mu <- (8*n_tree*(kappa^2))
+    tau_gamma <- (4*n_tree*(kappa^2))
+    tau_mu <- (4*n_tree*(kappa^2))
 
   } else {
     y_scale <- y_train
 
-    tau_gamma <- (8*n_tree*(kappa^2))/((max_y-min_y)^2)
-    tau_mu <- (8*n_tree*(kappa^2))/((max_y-min_y)^2)
+    tau_gamma <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
+    tau_mu <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
 
   }
 
@@ -557,8 +557,8 @@ rspBART <- function(x_train,
   # plot(all_tau_beta, type = "l")
   # plot(all_tau_gamma,type = "l")
   # plot(all_delta, type = "l")
-  plot(x_train_scale,y_scale)
-  points(x_train_scale,colMeans(all_y_hat[1501:2000,]),pch= 20, col = "blue")
+  # plot(x_train_scale,y_scale)
+  # points(x_train_scale,colMeans(all_y_hat[1501:2000,]),pch= 20, col = "blue")
   # # ============================================
   #
   # curr <- 0
